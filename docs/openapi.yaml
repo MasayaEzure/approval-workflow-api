@@ -1,0 +1,497 @@
+openapi: 3.0.3
+info:
+  title: Approval Workflow API
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+
+tags:
+  - name: Requests
+
+security:
+  - bearerAuth: []
+  - xUserIdAuth: []
+
+paths:
+  /requests/{id}:
+    get:
+      tags: [Requests]
+      summary: Get request detail (Request + optional Approval + RequestHistory)
+      operationId: getRequestDetail
+      description: |
+        Detail Flow: request detail retrieval.
+        Authorization: viewer must be either the applicant (owner) OR have APPROVER role.
+        If request exists but viewer is not permitted, return 403.
+      parameters:
+        - $ref: "#/components/parameters/RequestId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestDetailResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /requests:
+    get:
+      tags: [Requests]
+      summary: List my requests (applicant)
+      operationId: listMyRequests
+      description: |
+        List Flow (Applicant): list your own requests.
+        Error handling:
+        - 404: applicant not found (invalid authenticated user)
+        - 403: user is not APPLICANT
+        - 400: invalid pagination parameters (e.g., limit/cursor)
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestListResponse"
+        "400":
+          $ref: "#/components/responses/ListMyRequestsBadRequest"
+        "403":  
+          $ref: "#/components/responses/ListMyRequestsForbidden"
+        "404":
+          $ref: "#/components/responses/ListMyRequestsNotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /requests/approver:
+    get:
+      tags: [Requests]
+      summary: List requests for approver (filtered by status)
+      operationId: listRequestsForApprover
+      description: |
+        List Flow (Approver): list requests assigned to the authenticated approver, filtered by status.
+        Error handling:
+        - 404: approver user not found (invalid authenticated user)
+        - 403: user is not APPROVER
+        - 400: invalid status (must be one of SUBMITTED, APPROVED, REJECTED) or invalid pagination parameters
+      parameters:
+        - $ref: '#/components/parameters/ApproverStatus'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestListResponse'
+        '400':
+          $ref: '#/components/responses/ListApproverRequestsBadRequest'
+        '403':
+          $ref: '#/components/responses/ListApproverRequestsForbidden'
+        '404':
+          $ref: '#/components/responses/ListApproverRequestsNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /requests/{id}/submit:
+    post:
+      tags: [Requests]
+      summary: Submit request (DRAFT -> SUBMITTED)
+      operationId: submitRequest
+      parameters:
+        - $ref: "#/components/parameters/RequestId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestStatusResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /requests/{id}/approve:
+    post:
+      tags: [Requests]
+      summary: Approve request (SUBMITTED -> APPROVED)
+      operationId: approveRequest
+      parameters:
+        - $ref: "#/components/parameters/RequestId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestStatusResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /requests/{id}/reject:
+    post:
+      tags: [Requests]
+      summary: Reject request (SUBMITTED -> REJECTED)
+      operationId: rejectRequest
+      parameters:
+        - $ref: "#/components/parameters/RequestId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectRequestBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestStatusResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    xUserIdAuth:
+      type: apiKey
+      in: header
+      name: X-User-Id
+
+  parameters:
+    RequestId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+      example: 123
+
+    ApproverStatus:
+      name: status
+      in: query
+      required: true
+      description: "Status filter for approver list. Allowed values are SUBMITTED, APPROVED, REJECTED."
+      schema:
+        type: string
+        enum: [SUBMITTED, APPROVED, REJECTED]
+      example: SUBMITTED
+
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Max number of items to return.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 200
+      example: 50
+
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Pagination cursor (opaque). If omitted, returns the first page.
+      schema:
+        type: string
+      example: eyJjcmVhdGVkQXQiOiIyMDI2LTAxLTIzVDAwOjAwOjAwWiIsImlkIjoxMjN9
+
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            invalidStatus:
+              value:
+                code: BAD_REQUEST
+                message: "Invalid status parameter"
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            forbidden:
+              value:
+                code: FORBIDDEN
+                message: "Not permitted"
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            requestNotFound:
+              value:
+                code: REQUEST_NOT_FOUND
+                message: "Request not found"
+            userNotFound:
+              value:
+                code: USER_NOT_FOUND
+                message: "User not found"
+    InternalServerError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            error:
+              value:
+                code: INTERNAL_SERVER_ERROR
+                message: "Unexpected error"
+    ListMyRequestsBadRequest:
+      description: |
+        Bad Request.
+        - Invalid pagination parameters (e.g., limit/cursor).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalidPagination:
+              value:
+                code: BAD_REQUEST
+                message: Invalid pagination parameters
+
+    ListMyRequestsForbidden:
+      description: |
+        Forbidden.
+        - User is not APPLICANT.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            notApplicantRole:
+              value:
+                code: FORBIDDEN
+                message: User is not APPLICANT
+
+    ListMyRequestsNotFound:
+      description: |
+        Not Found.
+        - Applicant user not found (invalid authenticated user).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            applicantNotFound:
+              value:
+                code: USER_NOT_FOUND
+                message: Applicant user not found
+
+    ListApproverRequestsBadRequest:
+      description: |
+        Bad Request.
+        - Invalid status (must be one of SUBMITTED, APPROVED, REJECTED).
+        - Invalid pagination parameters (e.g., limit/cursor).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalidStatus:
+              value:
+                code: BAD_REQUEST
+                message: Invalid status
+            invalidPagination:
+              value:
+                code: BAD_REQUEST
+                message: Invalid pagination parameters
+
+    ListApproverRequestsForbidden:
+      description: |
+        Forbidden.
+        - User is not APPROVER.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            notApproverRole:
+              value:
+                code: FORBIDDEN
+                message: User is not APPROVER
+
+    ListApproverRequestsNotFound:
+      description: |
+        Not Found.
+        - Approver user not found (invalid authenticated user).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            approverNotFound:
+              value:
+                code: USER_NOT_FOUND
+                message: Approver user not found
+
+  schemas:
+    RequestStatus:
+      type: string
+      enum: [DRAFT, SUBMITTED, APPROVED, REJECTED]
+
+    UserRole:
+      type: string
+      enum: [APPLICANT, APPROVER]
+
+    Request:
+      type: object
+      required: [id, applicantUserId, status, createdAt, updatedAt, version]
+      properties:
+        id:
+          type: integer
+          format: int64
+        applicantUserId:
+          type: integer
+          format: int64
+        status:
+          $ref: "#/components/schemas/RequestStatus"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int32
+
+    Approval:
+      type: object
+      required: [id, requestId, approverUserId, status, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        requestId:
+          type: integer
+          format: int64
+        approverUserId:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [APPROVED, REJECTED]
+        comment:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    RequestHistory:
+      type: object
+      required: [id, requestId, actorUserId, action, status, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        requestId:
+          type: integer
+          format: int64
+        actorUserId:
+          type: integer
+          format: int64
+        action:
+          type: string
+          enum: [CREATE, SUBMIT, APPROVE, REJECT]
+        status:
+          $ref: "#/components/schemas/RequestStatus"
+        createdAt:
+          type: string
+          format: date-time
+
+    RequestDetailResponse:
+      type: object
+      required: [request, histories]
+      properties:
+        request:
+          $ref: "#/components/schemas/Request"
+        approval:
+          $ref: "#/components/schemas/Approval"
+          nullable: true
+        histories:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequestHistory"
+
+    RequestListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Request"
+        nextCursor:
+          type: string
+          nullable: true
+          description: Cursor for the next page (null if no more results).
+
+    RequestStatusResponse:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: integer
+          format: int64
+        status:
+          $ref: "#/components/schemas/RequestStatus"
+
+    RejectRequestBody:
+      type: object
+      properties:
+        comment:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: "If provided, must be non-empty (trimmed)."
+
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: BAD_REQUEST
+        message:
+          type: string
+          example: "Invalid request"
