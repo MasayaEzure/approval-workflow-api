@@ -50,10 +50,10 @@ public class ApprovalWorkflowService {
     }
 
     @Transactional
-    public void submit(Long requestId, Long actorId) {
+    public RequestResponseDto submit(Long requestId, Long actorId) {
         // ユーザーを取得
         User actor = loadUser(actorId);
-        
+
         // 申請を取得
         Request request = loadRequest(requestId);
 
@@ -79,16 +79,18 @@ public class ApprovalWorkflowService {
             "申請が提出されました"
         );
         historyRepository.save(history);
+
+        return new RequestResponseDto(request.getId(), request.getStatus());
     }
 
     @Transactional
-    public void approve(Long requestId, Long approverId, String comment) {
+    public RequestResponseDto approve(Long requestId, Long approverId, String comment) {
         // ユーザーを取得
         User approver = loadUser(approverId);
-        
+
         // ロールチェック
         requireApproverRole(approver, "承認");
-        
+
         // 申請を取得
         Request request = loadRequest(requestId);
 
@@ -116,16 +118,18 @@ public class ApprovalWorkflowService {
             msg
         );
         historyRepository.save(history);
+
+        return new RequestResponseDto(request.getId(), request.getStatus());
     }
 
     @Transactional
-    public void reject(Long requestId, Long approverId, String comment) {
+    public RequestResponseDto reject(Long requestId, Long approverId, String comment) {
         // ユーザーを取得
         User approver = loadUser(approverId);
 
         // ロールチェック
         requireApproverRole(approver, "却下");
-        
+
         // 申請を取得
         Request request = loadRequest(requestId);
 
@@ -153,6 +157,8 @@ public class ApprovalWorkflowService {
             msg
         );
         historyRepository.save(history);
+
+        return new RequestResponseDto(request.getId(), request.getStatus());
     }
 
     @Transactional(readOnly = true)

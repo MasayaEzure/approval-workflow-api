@@ -47,21 +47,21 @@ public class ApprovalWorkflowController {
     }
 
     @PostMapping("/requests/{id}/submit")
-    public ResponseEntity<Void> submitRequest(@PathVariable Long id, @Valid @RequestBody RequestSubmitDto dto) {
-        approvalWorkflowService.submit(id, dto.getActorId());
-        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    public ResponseEntity<RequestResponseDto> submitRequest(@PathVariable Long id, @Valid @RequestBody RequestSubmitDto dto) {
+        RequestResponseDto response = approvalWorkflowService.submit(id, dto.getActorId());
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/requests/{id}/approve")
-    public ResponseEntity<Void> approveRequest(@PathVariable Long id, @Valid @RequestBody RequestApproveDto dto) {
-        approvalWorkflowService.approve(id, dto.getApproverId(), dto.getComment());
-        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    public ResponseEntity<RequestResponseDto> approveRequest(@PathVariable Long id, @Valid @RequestBody RequestApproveDto dto) {
+        RequestResponseDto response = approvalWorkflowService.approve(id, dto.getApproverId(), dto.getComment());
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/requests/{id}/reject")
-    public ResponseEntity<Void> rejectRequest(@PathVariable Long id, @Valid @RequestBody RequestRejectDto dto) {
-        approvalWorkflowService.reject(id, dto.getApproverId(), dto.getComment());
-        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    public ResponseEntity<RequestResponseDto> rejectRequest(@PathVariable Long id, @Valid @RequestBody RequestRejectDto dto) {
+        RequestResponseDto response = approvalWorkflowService.reject(id, dto.getApproverId(), dto.getComment());
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/requests")
