@@ -136,8 +136,15 @@ paths:
             example:
               actorId: 1
       responses:
-        "204":
-          description: 提出成功（レスポンスボディなし）
+        "200":
+          description: 提出成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+              example:
+                id: 1
+                status: SUBMITTED
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -172,8 +179,15 @@ paths:
               approverId: 2
               comment: "承認します"
       responses:
-        "204":
-          description: 承認成功（レスポンスボディなし）
+        "200":
+          description: 承認成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+              example:
+                id: 1
+                status: APPROVED
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -208,8 +222,15 @@ paths:
               approverId: 2
               comment: "内容に不備があります"
       responses:
-        "204":
-          description: 却下成功（レスポンスボディなし）
+        "200":
+          description: 却下成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+              example:
+                id: 1
+                status: REJECTED
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
