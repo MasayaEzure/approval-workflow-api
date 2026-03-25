@@ -8,26 +8,24 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import java.io.*;
+import java.io.IOException;
 import java.util.UUID;
-
 
 public class RequestIdFilter implements Filter {
 
-    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) {
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+     throws IOException, ServletException {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         HttpServletResponse httpResponse = (HttpServletResponse) response;
+        // UUIDを生成してリクエストIDとして設定
         String requestId = UUID.randomUUID().toString();
 
-        try {
-            httpRequest.setAttribute("requestId", requestId);
-            httpResponse.getWriter().append("Request ID: " + requestId);
-            chain.doFilter(request, response);
-        } catch (IOException | ServletException e) {
-            throw new RuntimeException(e);
-        } finally {
-            httpRequest.removeAttribute("requestId");
-        }
+        // リクエストスコープにリクエストIDを設定
+        httpRequest.setAttribute("requestId", requestId);
+        // レスポンスヘッダーにX-Request-Idを設定
+        httpResponse.setHeader("X-Request-Id", requestId);
+        // 次のフィルターに処理を委譲
+        chain.doFilter(request, response);
     }
-
 }
