@@ -2,6 +2,9 @@ package com.example.approval_workflow_api.controller;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -15,6 +18,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.example.approval_workflow_api.dto.RequestApproveDto;
 import com.example.approval_workflow_api.dto.RequestCreateDto;
+import com.example.approval_workflow_api.dto.RequestHistoryDto;
 import com.example.approval_workflow_api.dto.RequestRejectDto;
 import com.example.approval_workflow_api.dto.RequestResponseDto;
 import com.example.approval_workflow_api.dto.RequestSubmitDto;
@@ -65,13 +69,20 @@ public class ApprovalWorkflowController {
     }
 
     @GetMapping("/requests")
-    public ResponseEntity<List<RequestResponseDto>> getRequests() {
-        List<RequestResponseDto> response = approvalWorkflowService.getAllRequests();
+    public ResponseEntity<Page<RequestResponseDto>> getRequests(
+        @PageableDefault(size = 20, sort = "createdAt") Pageable pageable
+    ) {
+        Page<RequestResponseDto> response = approvalWorkflowService.getAllRequests(pageable);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/requests/{id}")
     public ResponseEntity<RequestResponseDto> getRequest(@PathVariable Long id) {
         return ResponseEntity.ok(approvalWorkflowService.getRequest(id));
+    }
+
+    @GetMapping("/requests/{id}/histories")
+    public ResponseEntity<List<RequestHistoryDto>> getRequestHistories(@PathVariable Long id) {
+        return ResponseEntity.ok(approvalWorkflowService.getRequestHistories(id));
     }
 }

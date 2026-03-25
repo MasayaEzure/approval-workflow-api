@@ -1,6 +1,7 @@
 package com.example.approval_workflow_api.domain;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -43,8 +44,8 @@ public class Approval {
     private String comment;
 
     // 作成日時
-    @Column(nullable = false)
-    private LocalDateTime createdAt;
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
 
     protected Approval() {
         // JPA用のデフォルトコンストラクタ
@@ -59,7 +60,7 @@ public class Approval {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
+        createdAt = Instant.now();
     }
 
     public Long getId() {
@@ -82,11 +83,20 @@ public class Approval {
         return comment;
     }
 
-    public void setComment(String comment) {
-        this.comment = comment;
+    public Instant getCreatedAt() {
+        return createdAt;
     }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Approval approval = (Approval) o;
+        return id != null && Objects.equals(id, approval.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
     }
 }

@@ -42,8 +42,8 @@ public class ApiExceptionHandler {
         HttpServletRequest request
     ) {
         String msg = ex.getBindingResult().getFieldErrors().stream()
-            .findFirst()
             .map(err -> err.getField() + ": " + err.getDefaultMessage())
+            .reduce((a, b) -> a + "; " + b)
             .orElse("validation error");
 
         ErrorResponse body = new ErrorResponse(

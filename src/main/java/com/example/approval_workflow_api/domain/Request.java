@@ -1,6 +1,7 @@
 package com.example.approval_workflow_api.domain;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,6 +16,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 @Entity
 @Table(name = "requests")
@@ -25,7 +27,7 @@ public class Request {
     private Long id;
 
     // 申請タイトル
-    @Column(nullable = false)
+    @Column(nullable = false, length = 255)
     private String title;
 
     // 申請状態
@@ -35,16 +37,20 @@ public class Request {
 
     // 申請者
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "requester_id", nullable = false)
+    @JoinColumn(name = "requester_id", nullable = false, updatable = false)
     private User requester;
 
+    // 楽観ロック用バージョン
+    @Version
+    private Long version;
+
     // 作成日時
-    @Column(nullable = false)
-    private LocalDateTime createdAt;
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
 
     // 更新日時
     @Column(nullable = false)
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
 
     protected Request() {
         // JPA用のデフォルトコンストラクタ
@@ -58,14 +64,54 @@ public class Request {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
+        createdAt = Instant.now();
         updatedAt = createdAt;
     }
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        updatedAt = Instant.now();
     }
+
+    // --- 状態遷移ドメインメソッド ---
+
+    /**
+     * 申請を提出する（DRAFT -> SUBMITTED）
+     * @throws IllegalStateException 現在の状態が DRAFT でない場合
+     */
+    public void submit() {
+        if (this.status != RequestStatus.DRAFT) {
+            throw new IllegalStateException(
+                "申請の状態が不正です。DRAFT状態の申請のみ提出できます。現在の状態: " + this.status);
+        }
+        this.status = RequestStatus.SUBMITTED;
+    }
+
+    /**
+     * 申請を承認する（SUBMITTED -> APPROVED）
+     * @throws IllegalStateException 現在の状態が SUBMITTED でない場合
+     */
+    public void approve() {
+        if (this.status != RequestStatus.SUBMITTED) {
+            throw new IllegalStateException(
+                "申請の状態が不正です。SUBMITTED状態の申請のみ承認できます。現在の状態: " + this.status);
+        }
+        this.status = RequestStatus.APPROVED;
+    }
+
+    /**
+     * 申請を却下する（SUBMITTED -> REJECTED）
+     * @throws IllegalStateException 現在の状態が SUBMITTED でない場合
+     */
+    public void reject() {
+        if (this.status != RequestStatus.SUBMITTED) {
+            throw new IllegalStateException(
+                "申請の状態が不正です。SUBMITTED状態の申請のみ却下できます。現在の状態: " + this.status);
+        }
+        this.status = RequestStatus.REJECTED;
+    }
+
+    // --- getter ---
 
     public Long getId() {
         return id;
@@ -75,32 +121,38 @@ public class Request {
         return title;
     }
 
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
     public RequestStatus getStatus() {
         return status;
-    }
-
-    public void setStatus(RequestStatus status) {
-        this.status = status;
     }
 
     public User getRequester() {
         return requester;
     }
 
-    public void setRequester(User requester) {
-        this.requester = requester;
+    public Long getVersion() {
+        return version;
     }
 
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 
-    public LocalDateTime getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
-}
 
+    // --- equals / hashCode ---
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Request request = (Request) o;
+        return id != null && Objects.equals(id, request.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+}
