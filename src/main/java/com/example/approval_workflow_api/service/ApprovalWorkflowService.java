@@ -1,5 +1,9 @@
 package com.example.approval_workflow_api.service;
 
+import java.util.List;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -9,9 +13,9 @@ import com.example.approval_workflow_api.domain.ApprovalAction;
 import com.example.approval_workflow_api.domain.HistoryEvent;
 import com.example.approval_workflow_api.domain.Request;
 import com.example.approval_workflow_api.domain.RequestHistory;
-import com.example.approval_workflow_api.domain.RequestStatus;
 import com.example.approval_workflow_api.domain.User;
 import com.example.approval_workflow_api.domain.UserRole;
+import com.example.approval_workflow_api.dto.RequestHistoryDto;
 import com.example.approval_workflow_api.dto.RequestResponseDto;
 import com.example.approval_workflow_api.exception.BusinessErrorCode;
 import com.example.approval_workflow_api.exception.BusinessException;
@@ -43,21 +47,26 @@ public class ApprovalWorkflowService {
     @Transactional
     public RequestResponseDto createRequest(String title, Long requesterId) {
         User requester = loadUser(requesterId);
-        
+
+        // B-03: 申請作成はREQUESTERロールのみ
+        if (!UserRole.REQUESTER.equals(requester.getRole())) {
+            throw new BusinessException(
+                BusinessErrorCode.FORBIDDEN,
+                "申請の作成はREQUESTERロールのユーザーのみが実行できます"
+            );
+        }
+
         Request request = new Request(title, requester);
         Request savedRequest = requestRepository.save(request);
-        return new RequestResponseDto(savedRequest.getId(), savedRequest.getStatus());
+        return RequestResponseDto.from(savedRequest);
     }
 
     @Transactional
     public RequestResponseDto submit(Long requestId, Long actorId) {
-        // ユーザーを取得
         User actor = loadUser(actorId);
-
-        // 申請を取得
         Request request = loadRequest(requestId);
 
-        // actor == request.requesterId を強制
+        // 申請者本人のみ提出可能
         if (!actor.getId().equals(request.getRequester().getId())) {
             throw new BusinessException(
                 BusinessErrorCode.FORBIDDEN,
@@ -65,137 +74,129 @@ public class ApprovalWorkflowService {
             );
         }
 
-        // 状態がDRAFTであることを確認
-        requireStatus(request, RequestStatus.DRAFT, "申請");
-
-        // 状態をSUBMITTEDに変更
-        request.setStatus(RequestStatus.SUBMITTED);
+        // ドメインメソッドで状態遷移（B-05: 状態チェックはエンティティ内で実施）
+        try {
+            request.submit();
+        } catch (IllegalStateException e) {
+            throw new BusinessException(BusinessErrorCode.INVALID_STATE, e.getMessage());
+        }
 
         // 履歴を記録
         RequestHistory history = new RequestHistory(
-            request,
-            actor,
-            HistoryEvent.SUBMIT,
-            "申請が提出されました"
+            request, actor, HistoryEvent.SUBMIT, "申請が提出されました"
         );
         historyRepository.save(history);
 
-        return new RequestResponseDto(request.getId(), request.getStatus());
+        return RequestResponseDto.from(request);
     }
 
     @Transactional
     public RequestResponseDto approve(Long requestId, Long approverId, String comment) {
-        // ユーザーを取得
         User approver = loadUser(approverId);
-
-        // ロールチェック
         requireApproverRole(approver, "承認");
 
-        // 申請を取得
         Request request = loadRequest(requestId);
 
-        // 状態がSUBMITTEDであることを確認
-        requireStatus(request, RequestStatus.SUBMITTED, "承認");
+        // B-01: 自己承認の防止
+        if (approver.getId().equals(request.getRequester().getId())) {
+            throw new BusinessException(
+                BusinessErrorCode.FORBIDDEN,
+                "自身の申請を承認することはできません"
+            );
+        }
 
-        // 状態をAPPROVEDに変更
-        request.setStatus(RequestStatus.APPROVED);
+        // ドメインメソッドで状態遷移
+        try {
+            request.approve();
+        } catch (IllegalStateException e) {
+            throw new BusinessException(BusinessErrorCode.INVALID_STATE, e.getMessage());
+        }
 
         // 承認を記録
-        Approval approval = new Approval(
-            request,
-            approver,
-            ApprovalAction.APPROVE,
-            comment
-        );
+        Approval approval = new Approval(request, approver, ApprovalAction.APPROVE, comment);
         approvalRepository.save(approval);
 
         // 履歴を記録
         String msg = StringUtils.hasText(comment) ? comment : "申請が承認されました";
-        RequestHistory history = new RequestHistory(
-            request,
-            approver,
-            HistoryEvent.APPROVE,
-            msg
-        );
+        RequestHistory history = new RequestHistory(request, approver, HistoryEvent.APPROVE, msg);
         historyRepository.save(history);
 
-        return new RequestResponseDto(request.getId(), request.getStatus());
+        return RequestResponseDto.from(request);
     }
 
     @Transactional
     public RequestResponseDto reject(Long requestId, Long approverId, String comment) {
-        // ユーザーを取得
         User approver = loadUser(approverId);
-
-        // ロールチェック
         requireApproverRole(approver, "却下");
 
-        // 申請を取得
         Request request = loadRequest(requestId);
 
-        // 状態がSUBMITTEDであることを確認
-        requireStatus(request, RequestStatus.SUBMITTED, "却下");
+        // B-01: 自己却下の防止
+        if (approver.getId().equals(request.getRequester().getId())) {
+            throw new BusinessException(
+                BusinessErrorCode.FORBIDDEN,
+                "自身の申請を却下することはできません"
+            );
+        }
 
-        // 状態をREJECTEDに変更
-        request.setStatus(RequestStatus.REJECTED);
+        // ドメインメソッドで状態遷移
+        try {
+            request.reject();
+        } catch (IllegalStateException e) {
+            throw new BusinessException(BusinessErrorCode.INVALID_STATE, e.getMessage());
+        }
 
         // 却下を記録
-        Approval approval = new Approval(
-            request,
-            approver,
-            ApprovalAction.REJECT,
-            comment
-        );
+        Approval approval = new Approval(request, approver, ApprovalAction.REJECT, comment);
         approvalRepository.save(approval);
 
         // 履歴を記録
         String msg = StringUtils.hasText(comment) ? comment : "申請が却下されました";
-        RequestHistory history = new RequestHistory(
-            request,
-            approver,
-            HistoryEvent.REJECT,
-            msg
-        );
+        RequestHistory history = new RequestHistory(request, approver, HistoryEvent.REJECT, msg);
         historyRepository.save(history);
 
-        return new RequestResponseDto(request.getId(), request.getStatus());
+        return RequestResponseDto.from(request);
     }
 
+    // J-01: ページネーション対応
     @Transactional(readOnly = true)
-    public java.util.List<RequestResponseDto> getAllRequests() {
-        return requestRepository.findAll().stream()
-        .map(r -> new RequestResponseDto(r.getId(),r.getStatus()))
-        .toList();
+    public Page<RequestResponseDto> getAllRequests(Pageable pageable) {
+        return requestRepository.findAll(pageable)
+            .map(RequestResponseDto::from);
     }
 
     @Transactional(readOnly = true)
     public RequestResponseDto getRequest(Long requestId) {
         Request request = loadRequest(requestId);
-        return new RequestResponseDto(request.getId(), request.getStatus());
+        return RequestResponseDto.from(request);
+    }
+
+    // R-02: 履歴取得
+    @Transactional(readOnly = true)
+    public List<RequestHistoryDto> getRequestHistories(Long requestId) {
+        // 申請の存在確認
+        loadRequest(requestId);
+        return historyRepository.findByRequestIdOrderByCreatedAtAsc(requestId).stream()
+            .map(RequestHistoryDto::from)
+            .toList();
     }
 
     private User loadUser(Long userId) {
         return userRepository.findById(userId)
-            .orElseThrow(() -> new BusinessException(BusinessErrorCode.NOT_FOUND, "ユーザーが見つかりません: " + userId));
+            .orElseThrow(() -> new BusinessException(
+                BusinessErrorCode.NOT_FOUND, "ユーザーが見つかりません: " + userId));
     }
 
     private Request loadRequest(Long requestId) {
         return requestRepository.findById(requestId)
-            .orElseThrow(() -> new BusinessException(BusinessErrorCode.NOT_FOUND, "申請が見つかりません: " + requestId));
-    }
-
-    private void requireStatus(Request req, RequestStatus expected, String actionName) {
-        if (req.getStatus() != expected) {
-            throw new BusinessException(
-                BusinessErrorCode.INVALID_STATE,
-                "申請の状態が不正です。" + expected + "状態の申請のみ" + actionName + "できます。現在の状態: " + req.getStatus()
-            );
-        }
+            .orElseThrow(() -> new BusinessException(
+                BusinessErrorCode.NOT_FOUND, "申請が見つかりません: " + requestId));
     }
 
     private void requireApproverRole(User user, String actionName) {
         if (!UserRole.APPROVER.equals(user.getRole())) {
-            throw new BusinessException(BusinessErrorCode.FORBIDDEN,
+            throw new BusinessException(
+                BusinessErrorCode.FORBIDDEN,
                 actionName + "はAPPROVERロールのユーザーのみが実行できます");
         }
     }

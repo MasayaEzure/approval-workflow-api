@@ -1,15 +1,9 @@
 spring:
+  profiles:
+    active: dev
   datasource:
-    url: jdbc:postgresql://localhost:5432/approval_workflow
-    username: app
-    password: app
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/approval_workflow}
+    username: ${DB_USERNAME:app}
+    password: ${DB_PASSWORD:app}
   jpa:
-    hibernate:
-      ddl-auto: update
-    properties:
-      hibernate:
-        format_sql: true
-
-logging:
-  level:
-    org.hibernate.SQL: debug
+    open-in-view: false

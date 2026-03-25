@@ -1,11 +1,12 @@
 package com.example.approval_workflow_api.repository;
 
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 import com.example.approval_workflow_api.domain.RequestHistory;
 
-@Repository
 public interface RequestHistoryRepository extends JpaRepository<RequestHistory, Long> {
-}
 
+    List<RequestHistory> findByRequestIdOrderByCreatedAtAsc(Long requestId);
+}

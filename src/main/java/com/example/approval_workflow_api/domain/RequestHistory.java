@@ -1,6 +1,7 @@
 package com.example.approval_workflow_api.domain;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -33,7 +34,7 @@ public class RequestHistory {
     @JoinColumn(name = "actor_id", nullable = false)
     private User actor;
 
-    // イベント（SUBMIT / APPROVE / REJECT など）
+    // イベント（SUBMIT / APPROVE / REJECT）
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private HistoryEvent event;
@@ -43,8 +44,8 @@ public class RequestHistory {
     private String message;
 
     // 作成日時
-    @Column(nullable = false)
-    private LocalDateTime createdAt;
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
 
     protected RequestHistory() {
         // JPA用のデフォルトコンストラクタ
@@ -59,7 +60,7 @@ public class RequestHistory {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
+        createdAt = Instant.now();
     }
 
     public Long getId() {
@@ -82,7 +83,20 @@ public class RequestHistory {
         return message;
     }
 
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        RequestHistory that = (RequestHistory) o;
+        return id != null && Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
     }
 }
