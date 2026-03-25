@@ -23,6 +23,8 @@ servers:
 tags:
   - name: 申請
     description: 申請の作成・提出・承認・却下・取得
+  - name: 履歴
+    description: 操作履歴の取得
 
 paths:
   /requests:
@@ -33,6 +35,9 @@ paths:
       description: |
         新しい申請を下書き（DRAFT）状態で作成する。
         作成後、Location ヘッダに作成された申請の URI が返却される。
+
+        制約:
+        - REQUESTER ロールを持つユーザーのみが作成可能
       requestBody:
         required: true
         content:
@@ -57,9 +62,15 @@ paths:
                 $ref: "#/components/schemas/RequestResponse"
               example:
                 id: 1
+                title: "経費精算申請"
                 status: DRAFT
+                requesterName: "山田太郎"
+                createdAt: "2026-01-01T00:00:00Z"
+                updatedAt: "2026-01-01T00:00:00Z"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -67,25 +78,37 @@ paths:
 
     get:
       tags: [申請]
-      summary: 申請一覧を取得する
+      summary: 申請一覧を取得する（ページネーション対応）
       operationId: listRequests
       description: |
-        全申請の一覧を取得する。
-        ページネーションは未実装。全件を配列で返却する。
+        申請の一覧をページネーション付きで取得する。
+        Spring Data の Pageable を使用。デフォルトは 20 件、createdAt 昇順。
+      parameters:
+        - name: page
+          in: query
+          description: ページ番号（0 始まり）
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          description: 1 ページあたりの件数
+          schema:
+            type: integer
+            default: 20
+        - name: sort
+          in: query
+          description: ソート条件（例: createdAt,desc）
+          schema:
+            type: string
+            default: "createdAt,asc"
       responses:
         "200":
           description: 取得成功
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/RequestResponse"
-              example:
-                - id: 1
-                  status: DRAFT
-                - id: 2
-                  status: SUBMITTED
+                $ref: "#/components/schemas/PagedRequestResponse"
         "500":
           $ref: "#/components/responses/InternalServerError"
 
@@ -96,7 +119,6 @@ paths:
       operationId: getRequest
       description: |
         指定された ID の申請を取得する。
-        現在の実装では id と status のみ返却する。
       parameters:
         - $ref: "#/components/parameters/RequestId"
       responses:
@@ -108,7 +130,11 @@ paths:
                 $ref: "#/components/schemas/RequestResponse"
               example:
                 id: 1
+                title: "経費精算申請"
                 status: SUBMITTED
+                requesterName: "山田太郎"
+                createdAt: "2026-01-01T00:00:00Z"
+                updatedAt: "2026-01-01T01:00:00Z"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -144,7 +170,11 @@ paths:
                 $ref: "#/components/schemas/RequestResponse"
               example:
                 id: 1
+                title: "経費精算申請"
                 status: SUBMITTED
+                requesterName: "山田太郎"
+                createdAt: "2026-01-01T00:00:00Z"
+                updatedAt: "2026-01-01T01:00:00Z"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -166,6 +196,7 @@ paths:
 
         制約:
         - APPROVER ロールを持つユーザーのみが実行可能
+        - 自身の申請は承認不可（自己承認防止）
         - 申請の状態が SUBMITTED であること
       parameters:
         - $ref: "#/components/parameters/RequestId"
@@ -187,7 +218,11 @@ paths:
                 $ref: "#/components/schemas/RequestResponse"
               example:
                 id: 1
+                title: "経費精算申請"
                 status: APPROVED
+                requesterName: "山田太郎"
+                createdAt: "2026-01-01T00:00:00Z"
+                updatedAt: "2026-01-01T02:00:00Z"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -209,7 +244,9 @@ paths:
 
         制約:
         - APPROVER ロールを持つユーザーのみが実行可能
+        - 自身の申請は却下不可（自己承認防止）
         - 申請の状態が SUBMITTED であること
+        - 却下理由（comment）は必須
       parameters:
         - $ref: "#/components/parameters/RequestId"
       requestBody:
@@ -230,7 +267,11 @@ paths:
                 $ref: "#/components/schemas/RequestResponse"
               example:
                 id: 1
+                title: "経費精算申請"
                 status: REJECTED
+                requesterName: "山田太郎"
+                createdAt: "2026-01-01T00:00:00Z"
+                updatedAt: "2026-01-01T02:00:00Z"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -239,6 +280,40 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /requests/{id}/histories:
+    get:
+      tags: [履歴]
+      summary: 申請の操作履歴を取得する
+      operationId: getRequestHistories
+      description: |
+        指定された申請 ID に紐づく操作履歴を時系列順（昇順）で取得する。
+      parameters:
+        - $ref: "#/components/parameters/RequestId"
+      responses:
+        "200":
+          description: 取得成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RequestHistoryResponse"
+              example:
+                - id: 1
+                  event: SUBMIT
+                  actorName: "山田太郎"
+                  message: "申請が提出されました"
+                  createdAt: "2026-01-01T01:00:00Z"
+                - id: 2
+                  event: APPROVE
+                  actorName: "鈴木花子"
+                  message: "承認します"
+                  createdAt: "2026-01-01T02:00:00Z"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalServerError"
 
@@ -262,8 +337,8 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
           example:
-            code: "BAD_REQUEST"
-            message: "タイトルは必須です"
+            code: "VALIDATION_ERROR"
+            message: "title: タイトルは必須です"
             timestamp: "2026-01-01T00:00:00Z"
             path: "/api/requests"
 
@@ -299,7 +374,7 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
           example:
             code: "INVALID_STATE"
-            message: "申請の状態が不正です。DRAFT状態の申請のみ申請できます。現在の状態: SUBMITTED"
+            message: "申請の状態が不正です。DRAFT状態の申請のみ提出できます。現在の状態: SUBMITTED"
             timestamp: "2026-01-01T00:00:00Z"
             path: "/api/requests/1/submit"
 
@@ -310,8 +385,8 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
           example:
-            code: "INTERNAL_SERVER_ERROR"
-            message: "予期しないエラーが発生しました"
+            code: "INTERNAL_ERROR"
+            message: "Unexpected error occurred"
             timestamp: "2026-01-01T00:00:00Z"
             path: "/api/requests"
 
@@ -325,11 +400,12 @@ components:
         title:
           type: string
           description: 申請タイトル
+          maxLength: 255
           example: "経費精算申請"
         requesterId:
           type: integer
           format: int64
-          description: 申請者のユーザー ID
+          description: 申請者のユーザー ID（REQUESTER ロール必須）
           example: 1
 
     SubmitRequestBody:
@@ -355,11 +431,12 @@ components:
           type: string
           description: 承認コメント（任意）
           nullable: true
+          maxLength: 1000
           example: "承認します"
 
     RejectRequestBody:
       type: object
-      required: [approverId]
+      required: [approverId, comment]
       properties:
         approverId:
           type: integer
@@ -368,24 +445,92 @@ components:
           example: 2
         comment:
           type: string
-          description: 却下コメント（任意）
-          nullable: true
+          description: 却下理由（必須）
+          minLength: 1
+          maxLength: 1000
           example: "内容に不備があります"
 
     # --- レスポンス ---
 
     RequestResponse:
       type: object
-      description: 申請レスポンス（現在の実装では id と status のみ）
-      required: [id, status]
+      description: 申請レスポンス
+      required: [id, title, status, requesterName, createdAt, updatedAt]
       properties:
         id:
           type: integer
           format: int64
           description: 申請 ID
           example: 1
+        title:
+          type: string
+          description: 申請タイトル
+          example: "経費精算申請"
         status:
           $ref: "#/components/schemas/RequestStatus"
+        requesterName:
+          type: string
+          description: 申請者名
+          example: "山田太郎"
+        createdAt:
+          type: string
+          format: date-time
+          description: 作成日時（ISO 8601 / UTC）
+          example: "2026-01-01T00:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: 更新日時（ISO 8601 / UTC）
+          example: "2026-01-01T00:00:00Z"
+
+    PagedRequestResponse:
+      type: object
+      description: ページネーション付き申請一覧レスポンス（Spring Data Page 形式）
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequestResponse"
+        totalElements:
+          type: integer
+          format: int64
+          description: 全件数
+        totalPages:
+          type: integer
+          description: 総ページ数
+        size:
+          type: integer
+          description: 1 ページあたりの件数
+        number:
+          type: integer
+          description: 現在のページ番号（0 始まり）
+
+    RequestHistoryResponse:
+      type: object
+      description: 操作履歴レスポンス
+      required: [id, event, actorName, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 履歴 ID
+          example: 1
+        event:
+          $ref: "#/components/schemas/HistoryEvent"
+        actorName:
+          type: string
+          description: 操作者名
+          example: "山田太郎"
+        message:
+          type: string
+          nullable: true
+          description: 操作メッセージ
+          example: "申請が提出されました"
+        createdAt:
+          type: string
+          format: date-time
+          description: 操作日時（ISO 8601 / UTC）
+          example: "2026-01-01T01:00:00Z"
 
     ErrorResponse:
       type: object
@@ -403,7 +548,7 @@ components:
         timestamp:
           type: string
           format: date-time
-          description: エラー発生日時（ISO 8601）
+          description: エラー発生日時（ISO 8601 / UTC）
           example: "2026-01-01T00:00:00Z"
         path:
           type: string
@@ -460,12 +605,17 @@ components:
           format: int64
         title:
           type: string
+          maxLength: 255
         status:
           $ref: "#/components/schemas/RequestStatus"
         requesterId:
           type: integer
           format: int64
           description: 申請者のユーザー ID（FK: users.id）
+        version:
+          type: integer
+          format: int64
+          description: 楽観ロック用バージョン
         createdAt:
           type: string
           format: date-time
