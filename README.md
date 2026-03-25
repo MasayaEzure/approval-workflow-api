@@ -23,8 +23,8 @@ Spring Boot を用いて「申請・承認ワークフロー API」を実装し�
 - 申請提出（SUBMITTED）
 - 承認（APPROVED）
 - 却下 / 差戻し（REJECTED）
-- 一覧取得
-- 操作履歴の記録（監査用途）
+- 一覧取得（ページネーション対応）
+- 操作履歴の記録・取得（監査用途）
 
 ## State Transitions
 
@@ -90,7 +90,7 @@ HTTP レスポンスへ変換する。
   申請の作成・提出が可能
 
 - APPROVER
-  承認・却下が可能
+  承認・却下が可能（自身の申請は承認/却下不可）
 
 - ADMIN
   管理者（現在の実装では未使用）
@@ -106,8 +106,9 @@ HTTP レスポンスへ変換する。
 | POST | /api/requests/{id}/submit | 申請提出（DRAFT -> SUBMITTED） | 200 OK |
 | POST | /api/requests/{id}/approve | 承認（SUBMITTED -> APPROVED） | 200 OK |
 | POST | /api/requests/{id}/reject | 却下（SUBMITTED -> REJECTED） | 200 OK |
-| GET | /api/requests | 申請一覧取得 | 200 OK |
+| GET | /api/requests | 申請一覧取得（ページネーション対応） | 200 OK |
 | GET | /api/requests/{id} | 申請詳細取得 | 200 OK |
+| GET | /api/requests/{id}/histories | 操作履歴取得 | 200 OK |
 
 ## Example
 
@@ -128,7 +129,11 @@ Response (201 Created):
 ```json
 {
   "id": 1,
-  "status": "DRAFT"
+  "title": "経費精算申請",
+  "status": "DRAFT",
+  "requesterName": "山田太郎",
+  "createdAt": "2026-01-01T00:00:00Z",
+  "updatedAt": "2026-01-01T00:00:00Z"
 }
 ```
 
@@ -148,7 +153,11 @@ Response (200 OK):
 ```json
 {
   "id": 1,
-  "status": "SUBMITTED"
+  "title": "経費精算申請",
+  "status": "SUBMITTED",
+  "requesterName": "山田太郎",
+  "createdAt": "2026-01-01T00:00:00Z",
+  "updatedAt": "2026-01-01T01:00:00Z"
 }
 ```
 
@@ -169,7 +178,11 @@ Response (200 OK):
 ```json
 {
   "id": 1,
-  "status": "APPROVED"
+  "title": "経費精算申請",
+  "status": "APPROVED",
+  "requesterName": "山田太郎",
+  "createdAt": "2026-01-01T00:00:00Z",
+  "updatedAt": "2026-01-01T02:00:00Z"
 }
 ```
 
@@ -177,7 +190,7 @@ Response (200 OK):
 
 - PostgreSQL 16（Docker Compose で起動）
 - JPA (Hibernate)
-- DDL: `spring.jpa.hibernate.ddl-auto=update`（自動スキーマ生成）
+- DDL: dev プロファイルでは `ddl-auto=update`（自動スキーマ生成）、prod プロファイルでは `ddl-auto=validate`
 
 ## Run (Local)
 
