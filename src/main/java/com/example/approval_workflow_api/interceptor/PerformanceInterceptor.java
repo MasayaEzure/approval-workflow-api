@@ -15,16 +15,16 @@ public class PerformanceInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
         long startTime = System.currentTimeMillis();
-        request.setAttribute("処理の開始時刻", startTime);
+        request.setAttribute("startTime", startTime);
         return true;
     }
 
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex)
             throws Exception {
-        long startTime = (long) request.getAttribute("処理の開始時刻");
+        long startTime = (long) request.getAttribute("startTime");
         long duration = System.currentTimeMillis() - startTime;
-        log.info("{} {} {}ms",
+        log.info("{} {} {} {}ms",
                 request.getMethod(),
                 request.getRequestURI(),
                 response.getStatus(),
