@@ -12,32 +12,24 @@ import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-
 public class AccessLogFilter implements Filter {
 
     private static final Logger log = LoggerFactory.getLogger(AccessLogFilter.class);
 
-    private static final SimpleDateFormat date = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
-     throws IOException, ServletException {
+            throws IOException, ServletException {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         HttpServletResponse httpResponse = (HttpServletResponse) response;
 
-        log.info("ログ出力開始 :{}", date.format(new Date()));
-        log.info("HTTPメソッド: {}", httpRequest.getMethod());
-        log.info("リクエストURI: {}", httpRequest.getRequestURI());
-        log.info("リクエストヘッダー: {}", httpRequest.getHeaderNames());
-        log.info("リクエストボディ: {}", httpRequest.getReader().readLine());
-
+        long startTime = System.currentTimeMillis(); // リクエスト開始時間
         chain.doFilter(request, response);
+        long duration = System.currentTimeMillis() - startTime; // リクエスト処理時間
 
-        log.info("レスポンスステータス: {}", httpResponse.getStatus());
-        log.info("レスポンスヘッダー: {}", httpResponse.getHeaderNames());
-        log.info("レスポンスボディ: {}", httpResponse.getWriter().toString());
-        log.info("ログ出力終了 :{}", date.format(new Date()));
+        log.info("{} {} {} {}ms",
+                httpRequest.getMethod(),
+                httpRequest.getRequestURI(),
+                httpResponse.getStatus(),
+                duration);
     }
 }
