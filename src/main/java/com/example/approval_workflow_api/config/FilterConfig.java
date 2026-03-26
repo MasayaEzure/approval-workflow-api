@@ -16,7 +16,7 @@ public class FilterConfig {
 
         registration.setFilter(new RequestIdFilter());  // RequestIdFilterをフィルターとして登録
         registration.addUrlPatterns("/api/*"); // /api以下のすべてのエンドポイントに適用
-
+        registration.setOrder(1); // フィルターの実行順序を指定
         return registration;
     }
 
@@ -26,7 +26,7 @@ public class FilterConfig {
 
         registration.setFilter(new AccessLogFilter()); // AccessLogFilterをフィルターとして登録
         registration.addUrlPatterns("/api/*"); // /api以下のすべてのエンドポイントに適用    
-
+        registration.setOrder(2); // フィルターの実行順序を指定
         return registration;
     }
 }
